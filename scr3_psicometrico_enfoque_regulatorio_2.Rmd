@@ -1,0 +1,467 @@
+---
+title: "Psicometrico enfoque regulatorio"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+source("https://raw.githubusercontent.com/rduban/Rfunctions_DR/main/R%20functions.R")
+library(knitr)
+library(patchwork)
+library(ggrepel)
+```
+
+```{r, include=FALSE}
+pretest<- read_csv2("pretest_calificado.csv")[-1]
+```
+
+```{r}
+datos=na.omit(cbind(ID=1:nrow(pretest),pretest[paste0("ER",1:16)]))
+ID<-datos$ID
+datos=datos[-1]
+```
+
+#0066CC (Azul oscuro)
+#F0E442 (Amarillo suave)
+#00CC66 (Verde azulado)
+#CC6600 (Marrón claro)
+#CC0099 (Púrpura oscuro)
+#00CCCC (Turquesa claro)
+#FF9900 (Naranja intenso)
+#9933CC (Púrpura intenso)
+#66CC00 (Verde brillante)
+#FF3366 (Rosa brillante)
+#00FFCC (Turquesa brillante)
+#FF6600 (Naranja brillante)
+#6600CC (Morado oscuro)
+#CCCC00 (Amarillo intenso)
+#CC3300 (Rojo oscuro)
+
+```{r,echo=FALSE}
+colores<- c("#CC0099","#00CC66","#0066CC","#F0E442","#CC6600",
+            "#00CCCC","#FF9900","#9933CC","#66CC00","#FF3366",
+            "#00FFCC","#FF6600","#6600CC","#CCCC00","#CC3300")
+```
+
+```{r}
+x<-data.frame(colores,y=1)
+x %>%
+ggplot(aes(x=colores,y=y))+
+  geom_bar(aes(fill=colores),stat="identity")+
+  scale_fill_manual("",values=colores)
+```
+
+
+```{r,echo=FALSE}
+(x<-data.frame(apply(datos,2,table)))
+x$resp<-factor(1:5)
+x<-gather(x,key = "item",value = frec,-resp)
+x$resp<-factor(x$resp,levels = 5:1)
+x$item<-factor(x$item,levels = paste0("ER",1:16),
+               labels = paste0("p",1:16))
+
+x %>%
+  ggplot(aes(x=item,y=frec,fill=resp))+
+  geom_bar(stat="identity")+
+  scale_fill_manual("",values = colores)+
+  labs(x="Item",y="Frecuency")+
+  theme(legend.position = "right",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+```{r,echo=FALSE}
+x<-round(data.frame(apply(datos,2,function(x){cbind(median(x),IQR(x))})),2)
+rownames(x)<-c("Me","IQR")
+kable(x)
+```
+
+```{r,echo=FALSE}
+round(cor(datos),2)
+cors<-cor(datos)
+```
+
+# EFA
+
+Adecuación muestral
+
+```{r,echo=FALSE}
+KMO(cors)
+```
+
+
+```{r,include=FALSE}
+x<-1:nrow(datos)
+
+t(replicate(1000,{
+  KMO(cor(datos[x%in%sample(x,replace = T),]))$MSAi
+  }))->z
+
+data.frame(t(apply(z,2,function(x){
+  cbind(mean(x),quantile(x,probs = c(.025,.975)))})))->z
+
+z<-z[-1]
+colnames(z)<-c("mean","lower","higher")
+z$item<-paste0("p",1:16)
+z$item<-factor(z$item,levels = paste0("p",1:16))
+```
+
+```{r,include=FALSE}
+z %>%
+  ggplot(aes(x=item,y=mean))+
+  geom_point(color=colores[1],size=2)+
+  geom_errorbar(aes(ymin  = lower,
+                    ymax  = higher),
+                position = "identity",
+                color="#696969",
+                size=.5)+
+  geom_hline(yintercept = .7,size=1,alpha=.7,color=colores[10])+
+  ylim(.6,1)+labs(y="MSA",x="Item")+
+  theme(legend.position = "top",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))->x1
+```
+
+Número de factors
+
+```{r,include=FALSE}
+x<-1:nrow(datos)
+
+t(replicate(1000,{
+  eigen(cor(datos[x%in%sample(x,replace = T),]))$values
+  }))->z
+
+data.frame(t(apply(z,2,function(x){
+  cbind(mean(x),quantile(x,probs = c(.025,.975)))})))->z
+
+z<-z[-1]
+colnames(z)<-c("mean","lower","higher")
+z$factor<-1:16
+
+```
+
+```{r,include=FALSE}
+z %>%
+  ggplot(aes(x=factor,y=mean))+
+  geom_point(color=colores[1],size=2)+
+  geom_line(aes(y=mean),stat="identity",color=colores[1])+
+  geom_errorbar(aes(ymin  = lower,
+                    ymax  = higher),
+                position = "identity",
+                color="#696969",
+                size=.5)+
+  
+  geom_hline(yintercept = 1,size=.8,alpha=.7,color=colores[10])+
+  scale_y_continuous("Eigenvalue",breaks = seq(0,10,1))+
+  labs(x="Factor")+
+  theme(legend.position = "top",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))->x2
+```
+
+```{r,echo=FALSE,fig.height=4,fig.width=8}
+x1+x2
+```
+
+
+Extracción de factores
+
+```{r}
+(cargas1<-fa(datos,nfactors = 1,rotate="promax",fm="pa",cor="cor")$loadings) #Ok
+```
+
+```{r}
+(cargas2<-fa(datos,nfactors = 2,rotate="promax",fm="pa",cor="cor")$loadings)
+```
+
+```{r}
+(cargas3<-fa(datos,nfactors = 3,rotate="promax",fm="pa",cor="cor")$loadings)
+```
+
+```{r}
+(cargas3_2<-fa(datos[-c(3,8)],nfactors = 2,rotate="promax",fm="pa",cor="cor")$loadings)
+```
+
+```{r}
+(cargas3_3<-fa(datos[-c(3,8,13,14)],nfactors = 2,rotate="promax",fm="pa",cor="cor")$loadings)
+```
+
+```{r,echo=FALSE,fig.height=12,fig.width=4}
+z<-as.data.frame.matrix(cargas2)
+z$item<-paste0("p",1:16)
+z$factor<-factor(c(rep(1,8),rep(2,8)))
+
+x0<-z %>%
+  ggplot(aes(x=PA1,y=PA2))+
+  #geom_point(aes(color=factor),size=4,alpha=.7)+
+  geom_text_repel(aes(label=item,color=factor,size=3.5))+
+  geom_vline(xintercept = .35)+
+  geom_hline(yintercept = .35)+
+  scale_y_continuous("Prevention",breaks = seq(0,.9,.1))+
+  scale_x_continuous("Promotion",breaks = seq(-.2,.9,.1))+
+  scale_color_manual("",values=colores)+
+  theme(legend.position = "none",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="white"))
+
+z<-as.data.frame.matrix(cargas3)
+z$item<-paste0("p",1:16)
+z$factor<-factor(c(1,1,3,1,1,1,1,3,rep(2,4),3,3,2,2))
+
+x1<-z %>%
+  ggplot(aes(x=PA1,y=PA2))+
+  #geom_point(aes(color=factor),size=4,alpha=.7)+
+  geom_text_repel(aes(label=item,color=factor,size=3.5))+
+  geom_vline(xintercept = .35)+
+  geom_hline(yintercept = .35)+
+  scale_y_continuous("Prevention",breaks = seq(0,.9,.1))+
+  scale_x_continuous("Promotion",breaks = seq(-.2,.9,.1))+
+  scale_color_manual("",values=colores)+
+  theme(legend.position = "none",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="white"))
+
+z<-as.data.frame.matrix(cargas3_2)
+z$item<-paste0("p",c(1,2,4:7,9:16))
+z$factor<-factor(c(rep(1,6),rep(2,4),3,3,2,2))
+
+x2<-z %>%
+  ggplot(aes(x=PA1,y=PA2))+
+  #geom_point(aes(color=factor),size=4,alpha=.7)+
+  geom_text_repel(aes(label=item,color=factor,size=3.5))+
+  geom_vline(xintercept = .35)+
+  geom_hline(yintercept = .35)+
+  scale_y_continuous("Prevention",breaks = seq(0,.9,.1))+
+  scale_x_continuous("Promotion",breaks = seq(-.2,.9,.1))+
+  scale_color_manual("",values=colores)+
+  theme(legend.position = "none",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="white"))
+
+z<-as.data.frame.matrix(cargas3_3)
+z$item<-paste0("p",c(1,2,4:7,9:12,15,16))
+z$factor<-factor(c(rep(1,6),rep(2,6)))
+
+x3<-z %>%
+  ggplot(aes(x=PA1,y=PA2))+
+  geom_text_repel(aes(label=item,color=factor,size=3.5))+
+  geom_vline(xintercept = .35)+
+  geom_hline(yintercept = .35)+
+  scale_y_continuous("Prevention",breaks = seq(0,.9,.1))+
+  scale_x_continuous("Promotion",breaks = seq(-.2,.9,.1))+
+  scale_color_manual("",values=colores)+
+  theme(legend.position = "none",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="white"))
+x0/x1/x2/x3 + plot_layout(guides = "collect")+
+  plot_annotation(tag_levels = "A")
+```
+
+## ESEM
+
+Examinamos la normalidad multivariante
+```{r,echo=FALSE}
+MVN::mvn(datos,mvnTest = "mardia")$multivariateNormality
+```
+
+```{r}
+s1<-cfa(my_esem(cargas1),datos,estimator="MLR")
+s2<-cfa(my_esem(cargas2),datos,estimator="MLR")
+s3<-cfa(my_esem(cargas3),datos,estimator="MLR")
+s3_2<-cfa(my_esem(cargas3_2),datos,estimator="MLR")
+s3_3<-cfa(my_esem(cargas3_3),datos,estimator="MLR")
+```
+
+
+Evaluamos el modelo
+
+
+```{r,echo=FALSE}
+index<-c("chisq.scaled","df.scaled","cfi.robust","tli.robust","rmsea.robust")
+y1<-round(fitMeasures(s1)[index],3)
+y2<-round(fitMeasures(s2)[index],3)
+y3<-round(fitMeasures(s3)[index],3)
+y3_2<-round(fitMeasures(s3_2)[index],3)
+y3_3<-round(fitMeasures(s3_3)[index],3)
+
+out<-data.frame(rbind(y1,y2,y3,y3_2,y3_3))
+out[order(out$rmsea.robust),]
+```
+
+
+RMSEA entre 0.08 y 0.099 es una bondad de ajuste marginal. https://psycnet.apa.org/doiLanding?doi=10.1037/1082-989X.4.3.272
+
+```{r,echo=FALSE}
+summary(s3_3)
+```
+
+```{r,echo=FALSE}
+semPlot::semPaths(s3_3, "par", weighted = T, rotation=2, nCharNodes = 0, shapeMan = "square",
+         sizeMan = 6,sizeLat = 6,edge.color=1,esize=3,cut=.30,filetype="tiff",filename="esem_enfoque_regulatorio")
+```
+
+## Confiabilidad
+
+```{r,echo=FALSE}
+omega(datos[-c(3,8,13,14)],nfactors = 2,rotate = "promax",fm="pa",plot=F)$omega.group[1]
+```
+
+## Puntuaciones
+
+```{r,echo=FALSE}
+x<-datos[-c(3,8,13,14)];y1=cargas3_3[,1];y2=cargas3_3[,2]
+
+promocion2<-colSums((t(x)*y1))/sum(y1)
+prevencion2<-colSums((t(x)*y2))/sum(y2)
+```
+
+```{r,echo=FALSE}
+variables<-c("municipio","sexo","sexo_menor","contexto","parentesco","ocupacion_gr","educacion_gr","estrato_gr","familia","edadEncuestado","edad_gr","promocion","prevencion")
+```
+
+```{r,echo=FALSE}
+pretest<-cbind(pretest[ID,variables],promocion2,prevencion2)
+```
+
+```{r}
+cor.test(pretest$promocion2,pretest$prevencion2)
+```
+
+
+```{r}
+pretest %>%
+  filter(promocion2>=2) %>%
+  ggplot(aes(x=promocion2,y=prevencion2))+
+  geom_point(color=colores[1],size=2.5)+
+  stat_density_2d()+
+  geom_smooth(method = "lm",color=colores[1],alpha=.7)+
+  scale_x_continuous("Promotion",breaks = seq(2,5,.5))+
+  scale_y_continuous("Prevention",breaks = seq(2,5,.5))+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+# Comparaciones de grupo
+
+```{r}
+apply(pretest[13:14],2,function(x){
+  cbind(median(x),IQR(x))
+})
+```
+
+```{r}
+apply(pretest[c(13,14)],2,function(x){
+  kruskal.test(x~pretest$edad_gr)
+})
+
+apply(pretest[c(13,14)],2,function(x){
+  wilcox.test(x~pretest$educacion_gr,paired = F)
+})
+
+apply(pretest[c(13,14)],2,function(x){
+  wilcox.test(x~pretest$sexo_menor,paired = F)
+})
+
+```
+
+```{r}
+apply(pretest[c(13,14)],2,function(x){
+  tapply(x,pretest$educacion_gr,function(x){
+    cbind(median(x),IQR(x))
+})
+})
+
+```
+
+
+```{r}
+apply(pretest[c(13,14)],2,function(x){
+  tapply(x,pretest$edad_gr,function(x){
+    cbind(median(x),IQR(x))
+})
+})
+
+```
+
+```{r}
+apply(pretest[c(13,14)],2,function(x){
+  tapply(x,pretest$sexo_menor,function(x){
+    cbind(median(x),IQR(x))
+})
+})
+
+```
+
+
+```{r}
+z<-na.omit(pretest[c("prevencion2","promocion2","sexo_menor","educacion_gr")])
+z$sex_edu<-paste(z$sexo_menor,z$educacion_gr)
+
+apply(z[c(1,2)],2,function(x){
+  tapply(x,z$sex_edu,function(x){
+    cbind(median(x),IQR(x))
+})
+})
+
+
+apply(z[c(1,2)],2,function(x){
+  kruskal.test(x~z$sex_edu)
+})
+
+pgirmess::kruskalmc(z$prevencion2,z$sex_edu)
+```
+
+# Descrición de la muestra
+
+```{r}
+dim(pretest)
+
+prop.table(table(pretest$sexo))
+
+prop.table(table(pretest$educacion_gr))
+
+prop.table(table(pretest$ocupacion_gr))
+
+prop.table(table(pretest$estrato_gr))
+
+prop.table(table(pretest$contexto))
+
+prop.table(table(pretest$parentesco))
+
+prop.table(table(pretest$familia))
+
+
+# edad del cuidador
+pretest$edadEncuestado<- ifelse(!(pretest$edadEncuestado %in% 18:100),median(pretest$edadEncuestado),pretest$edadEncuestado)
+summary(pretest$edadEncuestado);sd(pretest$edadEncuestado,na.rm = T)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

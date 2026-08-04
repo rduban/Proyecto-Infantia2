@@ -1,0 +1,94 @@
+---
+title: "Psicometrico habitos de vida saludable"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+source("https://raw.githubusercontent.com/rduban/Rfunctions_DR/main/R%20functions.R")
+library(knitr)
+```
+
+```{r, include=FALSE}
+pretest<- read_csv2("pretest_imputed.csv")[-1]
+```
+
+# Psicometrico actitudes hacia el cuidado
+
+```{r}
+datos=na.omit(pretest[c("IDencuestado",paste0("HS",1:47))])
+datos=datos[-1]
+```
+
+```{r}
+apply(datos,2,table)
+```
+
+```{r}
+x<-round(data.frame(apply(datos,2,function(x){cbind(mean(x),sd(x))})),2)
+rownames(x)<-c("M","SD")
+kable(x)
+```
+
+```{r}
+round(cor(datos),2)
+```
+
+## CFA
+
+Examinamos la normalidad multivariante
+```{r}
+MVN::mvn(datos,mvnTest = "mardia")$multivariateNormality
+```
+
+Diseñamos diferentes variantes del modelo
+
+```{r}
+modelo1<-' 
+relaciones =~ HS1+HS2+HS3+HS4+HS5+HS6+HS7
+actividad =~ HS8+HS9+HS10
+descanso =~ HS11+HS12+HS13+HS14
+nutricion =~ HS15+HS16+HS17+HS18
+oral =~ HS19+HS20+HS21+HS22
+sexualidad =~ HS23+HS24+HS25+HS26+HS27
+sustancias =~ HS28+HS29+HS30+HS31+HS32
+optimismo =~ HS33+HS34+HS35+HS36+HS37
+ambiente =~ HS38+HS39+HS40+HS41
+movilidad =~ HS42+HS43+HS44+HS45+HS46+HS47
+'
+```
+
+Evaluamos los modelos
+
+```{r}
+a1<-cfa(modelo1,datos,estimator="MLR")
+```
+Examinamos los indices de ajuste
+```{r}
+x1<-round(fitMeasures(a1)[c("chisq.scaled","df.scaled","cfi.robust","tli.robust","rmsea.robust")],3)
+#x1<-round(fitMeasures(a1)[c("chisq","df","cfi","tli","rmsea")],3)
+x1
+```
+```{r}
+summary(a1)
+```
+
+## Confiabilidad
+
+```{r}
+set.seed(123)
+(a1<-as.numeric(psych::alpha(datos[1:7])$total[1])); my_alphaCI(datos[1:7])
+(a2<-as.numeric(psych::alpha(datos[8:10])$total[1])); my_alphaCI(datos[8:10])
+(a3<-as.numeric(psych::alpha(datos[11:14])$total[1])); my_alphaCI(datos[11:14])
+(a4<-as.numeric(psych::alpha(datos[15:18])$total[1])); my_alphaCI(datos[15:18])
+(a5<-as.numeric(psych::alpha(datos[19:22])$total[1])); my_alphaCI(datos[19:22])
+(a6<-as.numeric(psych::alpha(datos[23:27])$total[1])); my_alphaCI(datos[23:27])
+(a7<-as.numeric(psych::alpha(datos[28:32])$total[1])); my_alphaCI(datos[28:32])
+(a8<-as.numeric(psych::alpha(datos[33:37])$total[1])); my_alphaCI(datos[33:37])
+(a9<-as.numeric(psych::alpha(datos[38:41])$total[1])); my_alphaCI(datos[38:41])
+(a10<-as.numeric(psych::alpha(datos[42:47])$total[1])); my_alphaCI(datos[42:47])
+```

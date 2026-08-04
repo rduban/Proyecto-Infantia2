@@ -1,0 +1,260 @@
+---
+title: "Moderación del sexismo en la relación entre autoeficacia y satisfacción con la vida"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(patchwork)
+library(knitr)
+library(psych)
+source("https://raw.githubusercontent.com/rduban/Rfunctions_DR/main/R%20functions.R")
+```
+
+```{r, include=FALSE}
+pretest<-read_csv2("pretest_calificado.csv")[-1]
+
+variables<-c("actitud_sexi","autoeficacia","satisfa")
+demogra<-c("municipio","sexo","contexto","parentesco","ocupacion_gr","educacion_gr","estrato_gr","etniaCual","familia","edadEncuestado","edad_meses")
+
+x<- ifelse(rowSums(is.na(pretest[variables]))>0,1,0)
+
+pretest<- pretest[x==0,c(variables,demogra)]
+
+pretest<- pretest[pretest$sexo=="F"&!is.na(pretest$sexo),]
+```
+
+```{r}
+pretest$sexis_cat <-ifelse(pretest$actitud_sexi>quantile(pretest$actitud_sexi,probs = .75),"alto","bajo")
+
+pretest$sexis_cat<-factor(pretest$sexis_cat,levels = c("bajo","alto"))
+```
+
+```{r}
+colores<-c("#FF8F33","#AC7299","#306C94","#A52A2A","#559F52",
+           "#808B90","#B17AA0","#6E8B3D","8B7E66","#7A67EE",
+           "#0F6B99","#CDAA7D","#FFBF80","#71B966","#9932CC",
+           "#CD5C5C","#EED2EE","#8B864E","#7A8B8B","#FFDEAD",
+           "#8B3A62","#7B7B7B","#CDB5CD","#8B7E66","#6E8B3D")
+```
+
+
+# Descriptivos de la muestra
+
+```{r}
+dim(pretest)
+
+prop.table(table(pretest$educacion_gr))
+
+prop.table(table(pretest$ocupacion_gr))
+
+prop.table(table(pretest$estrato_gr))
+
+prop.table(table(pretest$contexto))
+
+prop.table(table(pretest$parentesco))
+
+prop.table(table(pretest$etniaCual))
+
+prop.table(table(pretest$familia))
+
+# edad del cuidador
+pretest$edadEncuestado<- ifelse(!(pretest$edadEncuestado %in% 18:100),median(pretest$edadEncuestado),pretest$edadEncuestado)
+summary(pretest$edadEncuestado);sd(pretest$edadEncuestado,na.rm = T)
+
+# Edad del niño
+pretest$edad_meses<- ifelse(!(pretest$edad_meses %in% 0:72),median(pretest$edad_meses),pretest$edad_meses)
+summary(pretest$edad_meses);sd(pretest$edad_meses,na.rm = T)
+
+prop.table(table(pretest$municipio))
+```
+
+# Regresión
+
+Realizamos el modelo de regresión gamma
+
+```{r}
+fit<-glm(data=pretest, satisfa~ autoeficacia*actitud_sexi, family = Gamma(link = "identity"))
+summary(fit)
+
+fit<-glm(data=pretest, satisfa~ autoeficacia*actitud_sexi, family = Gamma(link = "log"))
+summary(fit)
+
+fit<-glm(data=pretest, satisfa~ autoeficacia*actitud_sexi, family = Gamma(link = "inverse"))
+summary(fit)
+```
+
+Los aic son similares por lo que podemos usar la función de indentidad para no complejizar el modelo.
+
+```{r}
+fit<-glm(data=pretest, satisfa~ autoeficacia*actitud_sexi, 
+         family = Gamma(link = "identity"))
+summary(fit)
+```
+
+```{r}
+# tipo de familia, la ocupación y la edad no fueron significativos
+fit<-glm(data=pretest, satisfa~ autoeficacia*actitud_sexi+educacion_gr+
+ocupacion_gr+contexto+familia+edadEncuestado, 
+         family = Gamma(link = "identity"))
+summary(fit)
+```
+
+Creamos modelos glm filtrando para cada grupo de acuerdo al CONTEXTO
+
+
+```{r}
+fit<-glm(data=pretest[pretest$contexto=="rural",], satisfa~ autoeficacia*actitud_sexi, 
+         family = Gamma(link = "identity"))
+summary(fit)
+
+fit<-glm(data=pretest[pretest$contexto=="urbano",], satisfa~ autoeficacia*actitud_sexi, 
+         family = Gamma(link = "identity"))
+summary(fit)
+
+```
+
+Creamos modelos glm filtrando para cada grupo de acuerdo a la EDUCACION
+
+
+```{r}
+fit<-glm(data=pretest[pretest$educacion_gr=="No universidad",], satisfa~ autoeficacia*actitud_sexi, 
+         family = Gamma(link = "identity"))
+summary(fit)
+
+fit<-glm(data=pretest[pretest$educacion_gr=="Universidad",], satisfa~ autoeficacia*actitud_sexi, 
+         family = Gamma(link = "identity"))
+summary(fit)
+
+```
+
+
+```{r,echo=FALSE,eval=T}
+pretest %>%
+  ##mutate(sexis_cat=factor(sexis_cat,
+    #                      levels(c(1,2)),
+     #                     labels(c("low","high")))) %>%
+  ggplot(aes(x=autoeficacia,y=satisfa))+
+  #geom_point(aes(color=sexis_cat))+
+  geom_smooth(method = "lm",aes(color=sexis_cat))+
+  labs(x="PS",y="LS")+
+  scale_color_manual("SP",
+                     values=c("#FF8F33","#AC7299","#306C94"), labels(c("low"="bajo","high"="alto")))+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+```{r,echo=FALSE,eval=T,fig.height=5, fig.width=8}
+pretest %>%
+  mutate(contexto=factor(contexto,
+                          levels=c("rural","urbano"),
+                         labels=c("Rural","Urban"))) %>%
+  ggplot(aes(x=autoeficacia,y=satisfa))+
+  #geom_point(aes(color=sexis_cat))+
+  geom_smooth(method = "lm",aes(color=sexis_cat))+
+  labs(x="PS",y="LS")+
+  scale_color_manual("SP",
+                     values=c("#FF8F33","#AC7299","#306C94"), labels(c("low"="bajo","high"="alto")))+
+  facet_grid(.~contexto)+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+```{r,echo=FALSE,eval=T,fig.height=5, fig.width=8}
+pretest %>%
+  filter(!is.na(educacion_gr)) %>%
+  mutate(educacion_gr=factor(educacion_gr,
+                          levels=c("No universidad","Universidad"),
+                         labels=c("No university","University"))) %>%
+  ggplot(aes(x=autoeficacia,y=satisfa))+
+  #geom_point(aes(color=sexis_cat))+
+  geom_smooth(method = "lm",aes(color=sexis_cat))+
+  labs(x="PS",y="LS")+
+  scale_color_manual("SP",
+                     values=c("#FF8F33","#AC7299","#306C94"), labels(c("low"="bajo","high"="alto")))+
+  facet_grid(.~educacion_gr)+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+# Estadistica descriptiva de los constructos
+
+```{r,echo=FALSE}
+a<-rbind(c(summary(pretest$actitud_sexi),sd=sd(pretest$actitud_sexi)),
+     c(summary(pretest$autoeficacia),sd=sd(pretest$autoeficacia)),
+     c(summary(pretest$satisfa),sd=sd(pretest$satisfa)))
+
+rownames(a)<-c("sexismo","autoeficacia","satisfaccion")
+a
+```
+
+```{r}
+apply(pretest[c("actitud_sexi","autoeficacia","satisfa")],2,function(x){
+  c(median(x),IQR(x))
+})
+```
+
+```{r,echo=FALSE, eval=T,fig.height=4,fig.width=12}
+x1<-pretest%>%
+  ggplot(aes(x=satisfa))+
+  geom_histogram(fill=colores[2],color="black",bins = 10)+
+  scale_y_continuous("Participants",breaks = seq(0,250,40))+
+  labs(x="LS")+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x2<-pretest%>%
+  ggplot(aes(x=autoeficacia))+
+  geom_histogram(fill=colores[2],color="black",bins = 10)+
+  scale_y_continuous("Participants",breaks = seq(0,250,40))+
+  labs(x="PS")+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x3<-pretest%>%
+  ggplot(aes(x=actitud_sexi))+
+  geom_histogram(fill=colores[2],color="black",bins = 10)+
+  scale_y_continuous("Participants",breaks = seq(0,250,40))+
+  labs(x="SP")+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x1+x2+x3+plot_layout(guides = "collect")+
+  plot_annotation(
+    tag_levels = 'A',
+    theme = theme(
+      plot.title=element_text(size=20)))
+
+```
+
+
+```{r}
+rbind(my_uman(pretest$actitud_sexi,pretest$contexto),
+my_uman(pretest$autoeficacia,pretest$contexto),
+my_uman(pretest$satisfa,pretest$contexto)) %>% kable()
+```
+
+
+```{r}
+a<-pretest[!is.na(pretest$educacion_gr),]
+rbind(my_uman(a$actitud_sexi,a$educacion_gr),
+my_uman(a$autoeficacia,a$educacion_gr),
+my_uman(a$satisfa,a$educacion_gr)) %>% kable()
+```
+

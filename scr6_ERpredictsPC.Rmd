@@ -1,0 +1,227 @@
+---
+title: "Enfoque regulatorio predice las practicas de cuidado"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(patchwork)
+library(knitr)
+library(psych)
+
+```
+
+```{r, include=FALSE}
+pretest<-read_csv2("pretest_calificado.csv")[-1]
+
+variables<-c("promocion","prevencion","cuid_cognit","cuid_alimen","cuid_suenio","cuid_salud",
+          "cuid_etico","cuid_emocion","cuid_trascen","estrato_gr","educacion_gr","edadEncuestado")
+demogra<-c("contexto","parentesco","ocupacion_gr","etnia","familia","edad_meses")
+
+x<- ifelse(rowSums(is.na(pretest[variables]))>0,1,0)
+
+pretest<- pretest[x==0,c(variables,demogra)]
+```
+
+```{r}
+dim(pretest)
+table(pretest$educacion_gr)
+prop.table(table(pretest$educacion_gr))
+table(pretest$ocupacion_gr)
+prop.table(table(pretest$ocupacion_gr))
+table(pretest$estrato_gr)
+prop.table(table(pretest$estrato_gr))
+table(pretest$contexto)
+prop.table(table(pretest$contexto))
+table(pretest$parentesco)
+prop.table(table(pretest$parentesco))
+table(pretest$etnia)
+prop.table(table(pretest$etnia))
+table(pretest$familia)
+prop.table(table(pretest$familia))
+
+# edad del cuidador
+pretest$edadEncuestado<- ifelse(!(pretest$edadEncuestado %in% 18:100),median(pretest$edadEncuestado),pretest$edadEncuestado)
+summary(pretest$edadEncuestado);sd(pretest$edadEncuestado,na.rm = T)
+
+# Edad del niño
+pretest$edad_meses<- ifelse(!(pretest$edad_meses %in% 0:72),median(pretest$edad_meses),pretest$edad_meses)
+summary(pretest$edad_meses);sd(pretest$edad_meses,na.rm = T)
+```
+
+**Descriptivos por practicas de cuidado**
+
+```{r,echo=FALSE}
+data.frame(apply(pretest[3:9],2,function(x){
+ round(cbind(mean(x),sd(x)),2)
+}))->a
+row.names(a)<-c("M","DE")
+a %>% kable()
+```
+
+**Descriptivos para enfoque regulatorio
+```{r,echo=FALSE}
+data.frame(apply(pretest[1:2],2,function(x){
+ round(cbind(mean(x),sd(x)),2)
+}))->a
+row.names(a)<-c("M","DE")
+a %>% kable()
+```
+
+
+Considerando que hay pocas personas de estrato alto o que estudian, procedemos a combinar las observaciones de estrato medio y alto. y las de estudia con trabaja
+```{r}
+#pretest$ocupacion_gr<-ifelse(pretest$ocupacion_gr == "Hogar","Hogar","Est/trab")
+pretest$estrato_gr<-ifelse(pretest$estrato_gr == 1,"bajo","no_bajo")
+```
+
+
+# EDA
+
+```{r,echo=FALSE}
+a<-data.frame(apply(pretest[1:9],2,function(x){round(cbind(mean(x),sd(x)),2)}))
+rownames(a)<-c("M","SD")
+a %>% kable()
+```
+
+**Correlaciones**
+```{r,echo=FALSE}
+round(cor(pretest[1:8]),2)[1:2,] %>% kable()
+```
+
+# Modelado
+
+```{r,echo=FALSE,message=FALSE}
+fit<-lm(data=pretest, cuid_cognit~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a1<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_emocion~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a2<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_etico~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a3<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_trascen~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a4<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_suenio~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a5<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_salud~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a6<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_alimen~promocion+prevencion+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a7<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+```
+
+# Análisis por grupos
+
+```{r,echo=FALSE}
+a<-quantile(pretest$promocion, probs = 0.5)
+b<-quantile(pretest$prevencion, probs = 0.5)
+pretest$ER_group<- ifelse(pretest$promocion>=a&pretest$prevencion>=b,"ambos",ifelse(
+  pretest$promocion>=a&pretest$prevencion<b,"promocion",ifelse(
+    pretest$promocion<a&pretest$prevencion>=b,"prevencion",ifelse(
+    pretest$promocion<a&pretest$prevencion<b,"ninguno",NA))))
+pretest$ER_group<- factor(pretest$ER_group,levels = c("ninguno","prevencion","promocion","ambos"))
+```
+
+```{r,echo=FALSE,message=FALSE}
+fit<-lm(data=pretest, cuid_cognit~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a1<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_emocion~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a2<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_etico~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a3<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_trascen~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a4<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_suenio~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a5<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_salud~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a6<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+fit<-lm(data=pretest, cuid_alimen~ER_group+estrato_gr+educacion_gr+edadEncuestado)
+a<-summary(fit);fit$call
+(a7<-data.frame(cbind(round(a$coefficients[,c(1,4)],3),round(confint.lm(fit),3))))
+
+```
+
+
+```{r,include=F}
+a<-rbind(a1,a2,a3,a4,a5,a6,a7)
+names(a)<-c("beta","pvalue","iclower","icupper")
+a$predictora<-rep(c("b0","Prevention","Promotion","Both","estrato","educacion","edad"),7)
+a$predicha<-c(rep("CO",7),rep("SE",7),rep("ET",7),rep("TR",7),
+              rep("SL",7),rep("HE",7),rep("FE",7))
+a$predicha<-factor(a$predicha,levels =c("CO","SE","ET","TR","SL","HE","FE"))
+
+a<-a[a$predictora %in% c("Promotion","Prevention","Both"),]
+```
+
+**Betas e intervalos de confianza**
+
+```{r,echo=FALSE,fig.height=8,fig.width=6}
+a %>%
+  ggplot(aes(x=beta,y=predictora))+
+  geom_errorbar(aes(xmin  = iclower,
+                    xmax  = icupper),position = "identity",color="gray")+
+  geom_point(aes(color="black"),size=3)+
+  geom_vline(xintercept = 0,color="gray",size=1.1,alpha=0.7)+
+  geom_text(aes(label=round(beta,2)),vjust=2,size=3,alpha=0.7)+
+  facet_grid(predicha~.)+
+  scale_x_continuous(breaks = seq(0,1,0.05))+
+  scale_y_discrete(name="Regulatory focus clasification")+
+  scale_color_manual(values=c("black"))+
+  labs(x="Standardized betas with 95% CI",colour="")+
+  theme(legend.position = "none",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"))
+```
+
+
+
+```{r}
+pretest %>%
+ggplot(aes(x=prevencion, y=promocion) ) +
+  geom_point(aes(shape=ER_group),size=3.3,alpha=0.7)+
+  scale_shape_manual(name="Group",
+                     values=c(15:18),
+                   labels=c("ninguno"="None","prevencion"="Prevention",
+                            "promocion"="Promotion","ambos"="Both"))+
+  labs(x="Prevention",y="Promotion")+
+  ylim(2.5,5)+xlim(2.5,5)+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"))
+```
+
+
+
+
+
+
+
+

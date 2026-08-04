@@ -1,0 +1,257 @@
+---
+title: "Data imputation pre-test"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+library(mice)
+```
+
+```{r, include=FALSE}
+pretest<- read_csv2("pretest.csv")[-1]
+```
+
+Antes de hacer la imputación identificamos las obervaciones de quienes tengan más de 30% de datos faltantes
+
+```{r}
+x<-rowSums(is.na(pretest[52:199]))/ncol(pretest[52:199])
+hist(x)
+y= ifelse(x<=0.30,"Ok","missing")
+table(pretest$municipio,y)
+```
+
+# Imputacion Escalas
+
+## Actitudes hacia el cuidado
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("A",1:40)]))/ncol(pretest[paste0("A",1:40)])
+a<-pretest[x<=0.30,paste0("A",1:40)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("A",1:40)]<-a
+```
+
+## Habitos saludables
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("HS",1:47)]))/ncol(pretest[paste0("HS",1:47)])
+a<-pretest[x<=0.30,paste0("HS",1:47)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("HS",1:47)]<-a
+```
+
+## Autoeficacia
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("AE",1:6)]))/ncol(pretest[paste0("AE",1:6)])
+a<-pretest[x<=0.30,paste0("AE",1:6)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("AE",1:6)]<-a
+```
+
+## Intención
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("I",1:5)]))/ncol(pretest[paste0("I",1:5)])
+a<-pretest[x<=0.30,paste0("I",1:5)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("I",1:5)]<-a
+```
+
+## Norma subjetiva
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("NS",1:7)]))/ncol(pretest[paste0("NS",1:7)])
+a<-pretest[x<=0.30,paste0("NS",1:7)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("NS",1:7)]<-a
+```
+
+## Enfoque regulatorio
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("ER",1:16)]))/ncol(pretest[paste0("ER",1:16)])
+a<-pretest[x<=0.30,paste0("ER",1:16)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("ER",1:16)]<-a
+```
+
+## actitudes de genero
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("AG",1:7)]))/ncol(pretest[paste0("AG",1:7)])
+a<-pretest[x<=0.30,paste0("AG",1:7)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("AG",1:7)]<-a
+```
+
+## Satisfaccion con la vida
+
+```{r}
+x<-rowSums(is.na(pretest[paste0("S",1:5)]))/ncol(pretest[paste0("S",1:5)])
+a<-pretest[x<=0.30,paste0("S",1:5)]
+
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F)
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("S",1:5)]<-a
+```
+
+## Pobreza multidimensional
+
+```{r,eval=FALSE}
+x<-rowSums(is.na(pretest[paste0("PM",2:16)]))/ncol(pretest[paste0("PM",2:16)])
+a<-pretest[x<=0.30,paste0("PM",2:16)]
+  apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F,defaultMethod = "logreg")
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+
+pretest[x<=0.30,paste0("PM",2:16)]<-a
+```
+
+```{r}
+pmbar<- read_csv2("tablapm_bar.csv")[-1];pmbar<-pmbar[-c(seq(3,34,3))]
+pmmun<- read_csv2("tablapm_mun.csv")[-1];pmmun <-pmmun[c(2,4,6)]
+
+# ajustamos pmbar a formato largo
+a<-pmbar[c(1,seq(2,23,2))]
+b<-pmbar[c(1,seq(3,23,2))]
+a<-gather(a,value="edad",key="miembro",-cedula)[-2]
+b<-gather(b,value="estudio",key="miembro",-cedula)[3]
+x<-cbind(a,b)
+
+# juntamos pmbar y pmmun
+
+names(pmmun)<-names(x)
+x<-rbind(pmmun,x)
+
+# relacionamos pm al pretest
+
+x<-x[!is.na(x$cedula),]
+x$cedula<-as.numeric(as.character(x$cedula))
+x %>%
+  right_join(pretest, by=c("cedula"="IDencuestado")) %>%
+  select(cedula,edad,estudio) ->x
+
+a<-x[!is.na(x$cedula),-1]
+apply(a,2,function(x){round(100*(sum(is.na(x))/length(x)),2)})
+
+datos_imput <- mice::mice(a, m=1, seed = 123, printFlag = F,defaultMethod = "pmm")
+
+for(i in 1:ncol(a)){ # con este bucle reemplazamos los NA's originales 
+  if(length(datos_imput$imp[[i]])!=0){ #por las estimaciones conseguidas en el paso anterior
+   a[row.names(datos_imput$imp[[i]]),i]<-round(datos_imput$imp[[i]])
+   }
+}
+x[!is.na(x$cedula),-1]<-a
+
+write.csv2(x,"tablapm_imputada.csv")
+```
+
+
+# Otras imputaciones
+
+A continuación imputamos los numeros de telefonos que no fueron registrados. Para ellos usaremos los otros numeros que el encuestado indicó.
+
+```{r}
+pretest$telefonoEncuestado<- ifelse(is.na(pretest$telefonoEncuestado),
+       pretest$celularMadre,pretest$telefonoEncuestado);
+pretest$telefonoEncuestado<- ifelse(is.na(pretest$telefonoEncuestado),
+       pretest$celularPadre,pretest$telefonoEncuestado)
+
+y=!is.na(pretest$telefonoEncuestado)
+table(pretest$municipio,y)
+```
+
+```{r}
+write.csv2(pretest,"pretest_imputed.csv")
+```
+

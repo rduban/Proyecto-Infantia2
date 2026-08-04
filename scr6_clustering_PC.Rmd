@@ -1,0 +1,401 @@
+---
+title: "Clasificación de cuidadores"
+author: "Duban Romero"
+date: "`r Sys.time()`"
+output:
+  html_document: default
+  word_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+source("https://raw.githubusercontent.com/rduban/Rfunctions_DR/main/R%20functions.R")
+library(readxl)
+library(tidyverse)
+library(knitr)
+library(factoextra)
+library(NbClust)
+library(rgl)
+library(magick)
+```
+
+```{r, include=FALSE}
+pretest<-read.csv2("pretest_calificado.csv")[-1]
+
+variables<- c("cuid_cognit","cuid_alimen","cuid_suenio","cuid_salud",
+          "cuid_etico","cuid_emocion","cuid_trascen","autoeficacia","intencion","norma","actitud_sexi","estrato_gr")
+
+demogra<- c("educacion_gr","ocupacion_gr","contexto","parentesco","etnia","familia","edadEncuestado","edad_meses","sexo","DineroAprox")
+
+x<-ifelse(rowSums(is.na(pretest[variables]))>0,1,0)
+
+pretest<- pretest[x==0 & pretest$estrato_gr==1,c(variables,demogra)]
+
+```
+
+
+# Muestra
+```{r}
+dim(pretest)
+table(pretest$sexo)
+prop.table(table(pretest$sexo))
+table(pretest$educacion_gr)
+prop.table(table(pretest$educacion_gr))
+table(pretest$ocupacion_gr)
+prop.table(table(pretest$ocupacion_gr))
+table(pretest$estrato_gr)
+prop.table(table(pretest$estrato_gr))
+table(pretest$contexto)
+prop.table(table(pretest$contexto))
+table(pretest$parentesco)
+prop.table(table(pretest$parentesco))
+table(pretest$etnia)
+prop.table(table(pretest$etnia))
+table(pretest$familia)
+prop.table(table(pretest$familia))
+
+# edad del cuidador
+pretest$edadEncuestado<- ifelse(!(pretest$edadEncuestado %in% 18:100),median(pretest$edadEncuestado),pretest$edadEncuestado)
+summary(pretest$edadEncuestado);sd(pretest$edadEncuestado,na.rm = T)
+
+# Edad del niño
+pretest$edad_meses<- ifelse(!(pretest$edad_meses %in% 0:72),median(pretest$edad_meses),pretest$edad_meses)
+summary(pretest$edad_meses);sd(pretest$edad_meses,na.rm = T)
+
+# ingresos
+pretest$DineroAprox<-as.numeric(pretest$DineroAprox)
+pretest$DineroAprox<- ifelse(pretest$DineroAprox>2000000,NA,pretest$DineroAprox)
+summary(pretest$DineroAprox)
+```
+
+**Descriptivos por practicas de cuidado**
+
+```{r,echo=FALSE}
+data.frame(apply(pretest[1:11],2,function(x){
+ round(cbind(mean(x),sd(x)),2)
+}))->a
+row.names(a)<-c("M","DE")
+a %>% kable()
+```
+
+# EDA
+
+```{r}
+round(cor((pretest[1:11])),2) %>% kable()
+```
+
+# K-means
+```{r}
+a<- get_dist(pretest, method = "euclidean")
+
+set.seed(123)
+
+numclust<-NbClust::NbClust(pretest[1:11], distance = "euclidean", min.nc=2, max.nc=5, method = "kmeans", index = "all")
+
+t(numclust$Best.nc)
+
+# extraer 3 clusters
+
+clust <- kmeans(a, centers = 3, nstart = 25)
+fviz_cluster(clust, data = pretest[1:11])
+sum(clust$betweenss)/clust$totss
+pretest$clust1<- clust$cluster
+```
+
+De acuerdo a la grafica, se hace necesario eliminar las observaciones que quedaron en el cluster 2 ya que al parecer es un cluster compuesto por la información residual de los otros. (532,510,43)
+
+```{r}
+set.seed(123)
+
+a<- get_dist(pretest[-c(489,410,69),1:11],
+             method = "euclidean")
+
+numclust<-NbClust::NbClust(pretest[-c(489,410,69),1:11],
+                           distance = "euclidean", min.nc=2, max.nc=5,
+                           method = "kmeans", index = "all")
+
+t(numclust$Best.nc)
+
+# extraer 3 clusters
+
+clust<-kmeans(a, centers = 3, nstart = 25) 
+fviz_cluster(clust, data = pretest[-c(489,410,69),1:11])
+
+sum(clust$betweenss)/clust$totss
+pretest$clust2<-NA
+pretest[-c(489,410,69),]$clust2<- clust$cluster
+```
+
+# Visualizacion
+
+```{r,include=FALSE}
+(a<-data.frame(t(apply(pretest[1:11],2,function(x){tapply(x,pretest$clust2,mean)}))))
+a$escala<-row.names(a)
+a<-gather(a,key="grupo",value="promedio",-escala)
+a$escala<- factor(a$escala,levels = names(pretest)[1:11])
+
+colores<-c("#FF8F33","#AC7299","#306C94","#A52A2A","#559F52",
+           "#808B90","#B17AA0","#6E8B3D","8B7E66","#7A67EE",
+           "#0F6B99","#CDAA7D","#FFBF80","#71B966","#9932CC",
+           "#CD5C5C","#EED2EE","#8B864E","#7A8B8B","#FFDEAD",
+           "#8B3A62","#7B7B7B","#CDB5CD","#8B7E66","#6E8B3D")
+```
+
+```{r,echo=FALSE}
+a %>%
+  ggplot(aes(x=escala,y=promedio,group=grupo))+
+  geom_point(aes(color=grupo),size=2.5)+
+  geom_line(aes(color=grupo),size=1.2)+
+  scale_x_discrete(name="Scale",labels=c("cuid_cognit"="CO","cuid_alimen"="FE",
+                                         "cuid_suenio"="SL","cuid_salud"="HE","cuid_etico"="ET",
+                                         "cuid_emocion"="EM","cuid_trascen"="TR","autoeficacia"="SE",
+                                         "intencion"="BI","norma"="SN","actitud_sexi"="NSP"))+
+  scale_y_continuous(name="Mean",breaks = seq(0,5,0.5))+
+  scale_color_manual("Cluster",values=colores,labels=1:3)+
+  theme(legend.position = "bottom",
+          axis.text = element_text(face="bold"),
+          panel.background = element_rect(fill = "white"))
+```
+
+```{r,include=FALSE}
+coord_radar <- function (theta = "x", start = 0, direction = 1){
+theta <- match.arg(theta, c("x", "y"))
+r <- if (theta == "x")
+"y"
+else "x"
+ggproto("CordRadar", CoordPolar, theta = theta, r = r, start = start,
+direction = sign(direction),
+is_linear = function(coord) TRUE)
+}
+
+GeomRadar <- ggproto("GeomRadar", GeomPolygon,
+default_aes = aes(colour = "black", fill = NA, size = 0.5, linetype = 1, alpha = NA),
+draw_key = draw_key_path)
+
+geom_radar <- function(mapping = NULL, data = NULL, stat = "identity",
+position = "identity", na.rm = FALSE, show.legend = NA,
+inherit.aes = TRUE, ...) {
+layer(
+stat = stat, geom = GeomRadar, data = data, mapping = mapping,
+position = position, show.legend = show.legend, inherit.aes = inherit.aes,
+params = list(na.rm = na.rm, ...)
+)
+}
+```
+
+```{r,echo=FALSE}
+a %>% ggplot(aes(x = escala, y = promedio, color = grupo, group = grupo)) +
+  geom_radar() + geom_point() + coord_radar() +
+  #scale_x_discrete(expand = expand_scale(add = c(0, 1))) +
+  scale_x_discrete(expand = expand_scale(add = c(0,1)),
+                   name="",labels=c("cuid_cognit"="CO","cuid_alimen"="FE",
+                                         "cuid_suenio"="SL","cuid_salud"="HE","cuid_etico"="ET",
+                                         "cuid_emocion"="EM","cuid_trascen"="TR","autoeficacia"="SE",
+                                         "intencion"="BI","norma"="SN","actitud_sexi"="NSP"))+
+  labs(y="Mean score")+
+  scale_color_manual("Cluster",values=colores,labels=1:3)+
+  theme(legend.position = "bottom",
+        axis.text = element_text(face="bold"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+```
+
+```{r,eval=FALSE,include=FALSE}
+clust$cluster <- as.factor(clust$cluster)
+dimensiones<- t(clust$centers)
+colnames(dimensiones)<-c("Dimension1","Dimension2","Dimension3")
+
+plot3d(dimensiones[,1], dimensiones[,2], dimensiones[,3], col = clust$cluster,
+       type = "s", radius = .05, xlab = "Dimension 1", ylab="Dimension 2", zlab = "Dimension 3") 
+
+
+# To display in an R Markdown document:
+# rglwidget()
+
+# To save to a file:
+htmlwidgets::saveWidget(rglwidget(width = 900, height = 600), 
+                        file = "clustering_Scatter3D.html",
+                        libdir = "libs",
+                        selfcontained = FALSE
+                        )
+```
+
+
+```{r}
+etiqueta1=c("cuid_cognit","cuid_alimen","cuid_suenio",
+            "cuid_salud","cuid_etico","cuid_emocion","cuid_trascen",
+            "autoeficacia","intencion","norma","actitud_sexi")
+
+etiqueta2=c("CO","FE","SL","HE","ET","EM","TR","SF","BI","SN","NSP")
+
+a<-data.frame(cor(pretest[1:11]))
+a$y<-names(a)
+a<-gather(a,key = "variable",value = "correla",-y)
+a$correla<- round(a$correla,2)
+
+a$y<-factor(a$y,levels = etiqueta1,labels = etiqueta2)
+a$variable<-factor(a$variable,levels = etiqueta1,labels = etiqueta2)
+
+a %>%
+  ggplot(aes(x=variable,y=y, fill = correla))+
+  geom_tile()+
+  geom_text(aes(label=correla), color = "white")+
+  scale_fill_continuous(low="#FF8F33",high="#AC7299")+
+  labs(y="",x="")+
+  theme(legend.position = "none",
+          axis.text = element_text(face="bold"),
+          panel.background = element_rect(fill = "white"))
+```
+
+
+# Comparaciones
+
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_cognit~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Emocion**
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_emocion~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Etico**
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_etico~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+
+```
+
+**Trascendencia**
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_trascen~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+
+```
+
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_alimen~factor(clust2))
+summary
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Alimentacion**
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_suenio~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+
+```
+
+**Salud**
+```{r,echo=FALSE}
+a<-aov(data=pretest,cuid_salud~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Autoeficacia**
+```{r,echo=FALSE}
+a<-aov(data=pretest,autoeficacia~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Intencion**
+```{r,echo=FALSE}
+a<-aov(data=pretest,intencion~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Norma**
+```{r,echo=FALSE}
+a<-aov(data=pretest,norma~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+**Sexismo**
+```{r,echo=FALSE}
+a<-aov(data=na.omit(pretest[c("actitud_sexi","clust2")]),actitud_sexi~factor(clust2))
+summary(a)
+etaSquared(a,type=2,anova = FALSE)
+round(TukeyHSD(a)[[1]][,c(1,4)],3) %>% kable()
+```
+
+## Asociaciones
+
+```{r,echo=FALSE}
+x<-c("educacion_gr","ocupacion_gr","contexto","parentesco","etnia","familia")
+apply(pretest[x],2,function(z){
+  chisq.test(z,pretest$clust2)
+})
+```
+
+```{r,echo=FALSE}
+x<-table(pretest$clust2,pretest$contexto)
+t(x)/colSums(x)
+x<-data.frame(t(x)/colSums(x))
+```
+
+```{r}
+x %>% 
+  ggplot(aes(x=Var1,y=Freq,fill=Var2))+
+  geom_bar(stat="identity")+
+  scale_fill_manual("Cluster",values=colores,labels=1:3)+
+  scale_x_discrete("Living area",labels=c("rural"="Rural",
+                                         "urbano"="Urban"))+
+  scale_y_continuous("Cumulative proportion",breaks=seq(0,1,.1))+
+  theme(legend.position = "bottom",
+          axis.text = element_text(face="bold"),
+          panel.background = element_rect(fill = "white"))
+```
+
+
+## Descriptivos
+
+**Medias por cluster**
+```{r,echo=FALSE}
+apply(pretest[1:11],2,function(x){
+  round(tapply(x,pretest$clust2,mean),2)
+}) %>% kable()
+```
+
+**desviaciones por cluster**
+```{r,echo=FALSE}
+apply(pretest[1:11],2,function(x){
+  round(tapply(x,pretest$clust2,sd),2)
+}) %>% kable()
+```
+
+**N por cluster**
+```{r,echo=FALSE}
+table(pretest$clust2)
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,559 @@
+---
+title: "Data cleaning pre-test"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+---
+
+```{r, include=FALSE}
+library(readxl)
+library(tidyverse)
+```
+
+# Limpieza datos Barranquilla
+
+```{r, include=FALSE}
+# linea base municipios
+databaq<- read_excel("Clase_Encuesta_practicas_Barranquilla_oct18.xlsx",sheet = "Sheet0")
+
+codebook<-NULL
+codebook$databaq<-read_excel("Clase_Encuesta_practicas_Barranquilla_oct18.xlsx",sheet = "codebook")
+```
+
+Eliminamos respuestas no completadas o de dudosa procedencia
+
+```{r}
+databaq<- databaq[databaq$finalizado=="True"&databaq$consentimiento=="Si"&databaq$edad>11,]
+
+```
+
+Anonimizamos respuestas y quitamos variables que no son de interés
+
+```{r}
+databaq<- databaq[-c(1:20,22:26,37,38)]
+```
+
+Reemplazamos "N/A"s por NA.
+
+```{r}
+databaq<- data.frame(apply(databaq,2,function(x){ifelse(x=="N/A",NA,x)}))
+```
+
+Nos quedamos unicamente con las respuestas de Barranquilla
+
+```{r}
+databaq$municipio<- "bar"
+```
+
+Limpiamos estrato y creamos una variable nueva
+
+```{r}
+databaq$estrato<- as.factor(as.character(str_sub(databaq$estrato,1,1)))
+databaq$estrato_gr<-factor(databaq$estrato,levels = c(1:6),labels = c(1,1,2,2,3,3))
+```
+
+Creamos una nueva variable para los rangos de edad
+
+```{r}
+databaq$edad<- as.numeric(as.character(databaq$edad))
+databaq$edad_gr<-ifelse(databaq$edad<20,"adolescente",ifelse(databaq$edad<40,"joven",ifelse(databaq$edad<65,"adulto","anciano")))
+```
+
+Limpiamos sexo
+
+```{r}
+databaq$sexo<- factor(databaq$sexo, levels = c("1. Masculino","2. Femenino"), labels = c("M","F"))
+```
+
+Limpiamos etnia
+
+```{r}
+databaq$etnia<-as.factor(str_sub(databaq$etnia,4,5))
+```
+
+Limpiamos educacion y creamos una variable nueva
+
+```{r}
+databaq$educacion<-as.factor(str_sub(databaq$educacion,1,1))
+databaq$educacion_gr<-ifelse(is.na(databaq$educacion),NA,ifelse(databaq$educacion %in% 5:6,"Universidad","No universidad"))
+```
+
+Limpiamos ocupacion y creamos una nueva variable
+
+```{r}
+databaq$ocupacion<- factor(str_sub(databaq$ocupacion,1,1))
+databaq$ocupacion_gr<- ifelse(is.na(databaq$ocupacion),NA,ifelse(databaq$ocupacion %in% 2:3, "Trabajo",
+                              ifelse(databaq$ocupacion==1,"Estudio","Hogar")))
+```
+
+Limpiamos parentesco
+
+```{r}
+databaq$parentesco<-factor(str_sub(databaq$parentesco,1,1))
+```
+
+A partir de la fecha de nacimiento calculamos la edad a fecha del 30 de septiembre
+
+```{r}
+a<-as.Date(databaq$fecha_nacimiento, "%d/%m/%Y")
+databaq$edad_meses<- as.numeric(as.Date("2022-09-30")-a)/30
+```
+
+Creamos una nueva variable a partir de los ingresos
+
+```{r}
+databaq$ingresos<-as.numeric(as.character(databaq$ingresos))
+databaq$ingresos_gr<- ifelse(is.na(databaq$ingresos),NA, ifelse(databaq$ingresos<1000000,"Menos_1mill",ifelse(databaq$ingresos<3000000,"Menos_3mill",ifelse(databaq$ingresos<5000000,"Menos_5mill","Mas_5mill"))))
+
+databaq$ingresos_gr<- factor(databaq$ingresos_gr,levels = c("Menos_1mill","Menos_3mill","Menos_5mill","Mas_5mill"))
+```
+
+Creamos una variable para contexto
+
+```{r}
+databaq$contexto<-"urbano"
+```
+
+Creamos variable para tipo de familia
+
+```{r}
+x<-databaq[30:62]; x<-data.frame(x[c(2,5,8,11,14,17,21,23,26,29,32)])
+x<-data.frame(apply(x,2,function(y){chartr("áéíóúñ", "aeioun",tolower(y))})) #quitamos mayusculas y acentos
+z<-as.vector(unlist(as.list(lapply(x,unique)))) # identificamos strings
+z[!duplicated(z)] # nos quedamos con uno solo
+```
+
+```{r}
+databaq$familia<-apply(x,1,function(y){
+  ifelse(sum(is.na(y))==ncol(x),NA,
+  ifelse(sum(!is.na(y) & y %in% c("abuelo(a)","tio(a)","otro"))>0,"extendida",
+         ifelse(sum(y %in% c("madrastra","padrastro"))>0,"reconstituida",
+                ifelse(sum(y %in% c("madre","padre"))<2,"monoparental",
+                  ifelse(sum(y %in% c("madre"))>0 &sum(y %in% c("padre"))>0,
+                         "nuclear",NA)))))})
+```
+
+## Limpieza escalas
+
+```{r}
+databaq[79:219]<- data.frame(apply(databaq[79:219],2,function(x){as.numeric(as.character(x))})) # cohersionamos a numero
+```
+
+**Pobreza multidimensional**
+
+```{r}
+a<- data.frame(apply(databaq[63:78],2,function(x){ifelse(x=="SÍ",1,0)}))
+databaq[63:78]<-a
+```
+
+**Acitudes hacia el cuidado infantil** Items inversos: A16, A29, A34, A10, A31
+
+```{r}
+a<-databaq[paste0("A",1:40)]
+a[c(10,16,29,31,34)]<- data.frame(apply(a[c(10,16,29,31,34)],2,function(x){6-x})) # invertimos items reversos
+databaq[paste0("A",1:40)]<-a
+```
+
+Las escalas anteriores están OK
+
+**Estereotipos de genero**
+
+Items inversos: AG2, AG3, AG7
+
+```{r}
+a<-databaq[paste0("AG",1:7)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+a[c(2,3,7)]<- data.frame(apply(a[c(2,3,7)],2,function(x){6-x})) # invertimos items reversos
+databaq[paste0("AG",1:7)]<-a
+```
+
+Las escalas anteriores están OK
+
+**Norma subjetiva**
+
+Items inversos: NS2, NS3, NS5, NS6, NS7
+
+```{r}
+a<-databaq[paste0("NS",1:7)]
+a[c(2,3,5,6,7)]<- data.frame(apply(a[c(2,3,5,6,7)],2,function(x){6-x})) # invertimos items reversos
+databaq[paste0("NS",1:7)]<-a
+```
+
+Quitamos cualquier duplicado que exista
+
+```{r}
+databaq<- databaq[!duplicated(databaq$cedula)&!is.na(databaq$cedula),]
+```
+
+# Limpieza datos Municipios
+
+```{r, include=FALSE}
+# linea base municipios
+datamun_demo<- read_excel("Encuestas_practicas_de_cuidado_municipios_nov01.xlsx",sheet = "SociodemograficoTodo")
+datamun<- read_excel("Encuestas_practicas_de_cuidado_municipios_nov01.xlsx",sheet = "EncuestaTodo")
+datamun_pm<-read_excel("Encuestas_practicas_de_cuidado_municipios_nov01.xlsx",sheet = "PMtodo")
+codebook$datamun<-read_excel("Encuestas_practicas_de_cuidado_municipios_nov01.xlsx",sheet = "codebook")
+```
+
+**Limpiamos los datos de la encuesta PM**
+
+Cambiamos etiquetas
+
+```{r}
+names(datamun_pm)<-c("numEncuesta","CCencuestado","numeroMiembro","edad","parentesco","anioEstudio")
+```
+
+Limpieza general
+
+```{r,warning=FALSE}
+# quitamos acentos y mayusculas
+datamun_pm<-data.frame(apply(datamun_pm,2,function(y){chartr("áéíóúñ", "aeioun",tolower(y))})) 
+
+#edad
+datamun_pm$edad<- as.numeric(as.character(substr(datamun_pm$edad,1,2)))
+
+# años de estudio
+datamun_pm$anioEstudio<-ifelse(datamun_pm$anioEstudio %in% c("guarderia","transicion",
+                                                             "sin estudio","cdi","hogar"),0,
+       ifelse(datamun_pm$edad>=10&datamun_pm$anioEstudio=="primaria",5,
+       ifelse(datamun_pm$edad>=17&
+                datamun_pm$anioEstudio%in%c("bachillerato","bchillerato","bachiller",
+                            "secundaria","tecnico","tecnico-tecnologo","tecnologo",
+                            "tecnico - tecnologo","tenico","profesional","pregrado"),11,
+              datamun_pm$anioEstudio)))
+
+datamun_pm$anioEstudio<-ifelse(datamun_pm$edad<=5 & is.na(datamun_pm$anioEstudio),
+                               0,datamun_pm$anioEstudio)
+datamun_pm$anioEstudio<-ifelse(datamun_pm$anioEstudio=="primaria",(datamun_pm$edad-4),
+                               datamun_pm$anioEstudio)
+datamun_pm$anioEstudio<-ifelse(datamun_pm$anioEstudio %in%
+                                 c("bachillerato","bchillerato","bachiller"),
+                               (datamun_pm$edad-4),datamun_pm$anioEstudio)
+datamun_pm$anioEstudio<-as.numeric(as.character(datamun_pm$anioEstudio))
+
+# parentesco
+datamun_pm$parentesco<-ifelse(datamun_pm$parentesco %in% c("hija","hijo"),"hermano",ifelse(datamun_pm$parentesco %in%
+         c("prima","primo"),"sobrino",datamun_pm$parentesco))
+```
+
+Reemplazamos "N/A" por NA
+
+```{r}
+datamun_pm<- data.frame(apply(datamun_pm,2,function(x){ifelse(x=="n/a",NA,x)}))
+
+datamun<- data.frame(apply(datamun,2,function(x){ifelse(x=="N/A"|x=="n/a",NA,x)}))
+
+datamun_demo<- data.frame(apply(datamun_demo,2,function(x){ifelse(x=="N/A"|x=="n/a",NA,x)}))
+```
+
+
+Eliminamos posibles duplicados
+
+```{r}
+datamun_demo<-datamun_demo[!duplicated(datamun_demo$IDencuestado)&
+                             !is.na(datamun_demo$IDencuestado),]
+```
+
+Creamos una llave que incluya el numero de telefono de quienes  no reportaron cedula
+```{r}
+datamun$x<-ifelse(is.na(datamun$CC),datamun$telefono,datamun$CC)
+datamun_demo$x <-ifelse(is.na(datamun_demo$IDencuestado),
+                        datamun_demo$telefonoEncuestado,datamun_demo$IDencuestado)
+
+```
+
+Eliminamos las observaciones de quienes no indican ni cedula ni numero de telefoo o tienen CC duplicada.
+
+```{r}
+datamun<-datamun[!duplicated(datamun$x) & !is.na(datamun$x),]
+datamun_demo<-datamun_demo[!duplicated(datamun_demo$x) & !is.na(datamun_demo$x),]
+```
+
+Relacionamos las respuestas del demografico con las de las encuestas
+
+```{r}
+datamun_demo %>%
+  full_join(datamun,by=c("x")) %>%
+  select(-x) ->datamun1
+```
+
+Cohersionamos valores numericos a numero
+
+```{r,warning=FALSE}
+datamun1[c(29,42:45,47,49,51,52,64:211)]<-data.frame(apply(datamun1[c(29,42:45,47,49,51,52,64:211)],2,
+                                                           function(x){as.numeric(as.character(x))}))
+```
+
+creamos una variable nueva para estrato
+
+```{r}
+datamun1$estrato_gr<-factor(1)
+```
+
+Creamos una nueva variable para los rangos de edad
+
+```{r}
+datamun1$edad_gr<-ifelse(datamun1$edadEncuestado<20,"adolescente",ifelse(datamun1$edadEncuestado<40,"joven",ifelse(datamun1$edadEncuestado<65,"adulto","anciano")))
+```
+
+Limpiamos sexo
+
+```{r}
+datamun1$sexo<- factor(datamun1$sexo, levels = 1:2, labels = c("M","F"))
+```
+
+Limpiamos etnia
+
+```{r}
+datamun1$etnia<-factor(datamun1$etnia,levels = c(1,2),labels = c("No","Si"))
+```
+
+Limpiamos desplazado/migrante
+
+```{r}
+datamun1$Desplazado<-factor(datamun1$Desplazado,levels = c(1,2),labels = c("No","Si"))
+```
+
+Limpiamos educacion y creamos una variable nueva
+
+```{r}
+#databaq$educacion<-as.factor(str_sub(databaq$educacion,1,1))
+datamun1$educacion_gr<-ifelse(is.na(datamun1$educacion),NA,ifelse(datamun1$educacion %in% 5:6,"Universidad","No universidad"))
+```
+
+Limpiamos ocupacion y creamos una nueva variable
+
+```{r}
+#databaq$ocupacion<- factor(str_sub(databaq$ocupacion,1,1))
+datamun1$ocupacion_gr<- ifelse(datamun1$ocupacion %in% 2:3, "Trabajo",
+                              ifelse(datamun1$ocupacion==1,"Estudio","Hogar"))
+```
+
+A partir de la fecha de nacimiento calculamos la edad a fecha del 30 de septiembre
+
+```{r}
+a<-as.Date(datamun1$fechaNacimiento, "%d/%m/%Y")
+datamun1$edad_meses<- as.numeric(as.Date("2022-09-30")-a)/30
+```
+
+Limpiamos y transformamos los ingresos semanales a ingresos mensuales
+
+```{r}
+datamun1$DineroAprox<- datamun1$DineroAprox*4.33
+```
+
+```{r}
+datamun1$ingresos_gr<- ifelse(datamun1$DineroAprox<1000000,"Menos_1mill",ifelse(datamun1$DineroAprox<3000000,"Menos_3mill",ifelse(datamun1$DineroAprox<5000000,"Menos_5mill","Mas_5mill")))
+datamun1$ingresos_gr<- factor(datamun1$ingresos_gr,levels = c("Menos_1mill","Menos_3mill","Menos_5mill","Mas_5mill"))
+```
+
+Creamos una variable para contexto
+
+```{r}
+datamun1$contexto<-"rural"
+```
+
+Creamos variable para tipo de familia
+
+```{r}
+x<-datamun_pm[c(2,5)]
+z<-unique(x$parentesco)# identificamos strings
+#z[!duplicated(z)] # nos quedamos con uno solo
+
+x %>%
+  group_by(CCencuestado) %>%
+  summarise(familia = ifelse(sum(!is.na(parentesco))==0,NA,
+           ifelse(sum(parentesco %in% c("abuelo(a)","tio(a)","primo(a)","otro"))>0,"extendida",
+         ifelse(sum(parentesco %in% c("madrastra","padrastro",
+                                      "hermanastro(a)"))>0,"reconstituida",
+                ifelse(sum(parentesco %in% c("madre","padre"))<2,"monoparental",
+                       ifelse(sum(parentesco %in% c("madre"))>0 &
+                                sum(parentesco %in% c("padre"))>0,
+                         "nuclear",NA)))))) %>%
+  right_join(datamun1, by =c("CCencuestado"="IDencuestado")) %>%select(familia) ->a
+
+datamun1<-cbind(datamun1,a)
+```
+
+Asignamos categorias a la variable municipio
+
+```{r}
+datamun1$municipio<- factor(datamun1$municipio,
+                            levels = 0:3,
+                            labels = c("L","R","M","S"))
+```
+
+## Limpieza escalas
+
+**Pobreza multidimensional**
+
+```{r}
+a<- 2-datamun1[paste0("PM",2:16)]
+a<-data.frame(apply(a,2,function(x){ifelse(x==0|x==1,x,NA)}))
+datamun1[paste0("PM",2:16)]<-a
+```
+
+**Acitudes hacia el cuidado infantil**
+
+Items inversos: A16, A29, A34 - A10, A31
+
+```{r}
+a<-datamun1[paste0("A",1:40)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+a[c(10,16,29,31,34)]<- data.frame(apply(a[c(10,16,29,31,34)],2,function(x){6-x})) # invertimos items reversos
+datamun1[79:118]<-a
+```
+
+Las escalas anteriores están OK
+
+**Estereotipos de genero**
+
+Items inversos: AG2, AG3, AG7
+
+```{r}
+a<-datamun1[paste0("AG",1:7)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+a[c(2,3,7)]<- data.frame(apply(a[c(2,3,7)],2,function(x){6-x})) # invertimos items reversos
+datamun1[paste0("AG",1:7)]<-a
+```
+
+**Enfoque regulatorio**
+
+```{r}
+a<-datamun1[paste0("ER",1:16)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+datamun1[paste0("ER",1:16)]<-a
+```
+
+**Habitos saludables**
+
+```{r}
+a<-datamun1[paste0("HS",1:47)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+datamun1[paste0("HS",1:47)]<-a
+```
+
+**Norma subjetiva**
+
+Items inversos: NS2, NS3, NS5, NS6, NS7
+
+```{r}
+a<-datamun1[paste0("NS",1:7)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+a[c(2,3,5,6,7)]<- data.frame(apply(a[c(2,3,5,6,7)],2,function(x){6-x})) # invertimos items reversos
+datamun1[paste0("NS",1:7)]<-a
+```
+
+**Autoeficacia en la crianza**
+
+Items inversos: AE1,AE2,AE3
+
+```{r}
+a<-datamun1[paste0("AE",1:6)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+a[c(1:3)]<- data.frame(apply(a[c(1:3)],2,function(x){6-x})) # invertimos items reversos
+datamun1[paste0("AE",1:6)]<-a
+```
+
+**Intención de cuidado**
+
+```{r}
+a<-datamun1[paste0("I",1:5)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+datamun1[paste0("I",1:5)]<-a
+```
+
+**Satisfacción con la vida**
+
+```{r}
+a<-datamun1[paste0("S",1:5)]
+a<-data.frame(apply(a,2,function(x){ifelse(x %in% 1:5,x,NA)}))
+datamun1[paste0("S",1:5)]<-a
+```
+
+Quitamos cualquier duplicado existente
+
+```{r}
+datamun1<- datamun1[!duplicated(datamun1$IDencuestado)&!is.na(datamun1$IDencuestado),]
+```
+
+## Integrar bases de datos
+
+```{r}
+# seleccionamos variables de la BD de los municipios
+a<-datamun1[c(4,3,5:7,27,11,9,8,10,14,16,19,22,62,63,36,24,25,28:35,37:52,212:219,64:78,79:118,119:165,182:187,200:204,205:211,166:181,188:194,195:199,1)]
+
+# seleccionamos variables de la BD de barranquilla
+x<-rep(NA,nrow(databaq))
+b<-cbind(databaq[1],x,x,x,x,databaq[3],x,x,x,databaq[2],x,x,x,x,x,x,databaq[25],x,x,databaq[4:11],x,databaq[c(12:26,220:227,63:66,68:78,79:118,119:165,182:187,200:204,205:211,166:181,188:194,195:199)],x)
+
+names(b)<- names(a)
+pretest<- rbind(a,b)
+
+```
+
+Creamos una ID anonima para los encuestados
+
+```{r}
+x=pretest$IDencuestado; y=pretest$NombreEncuestado
+
+pretest$IDanonimo<-tolower(paste0(pretest$municipio,
+                                  substr(x,nchar(x)-4,nchar(x)),
+                                  substr(y,1,2)))
+```
+
+## Ultimos ajustes
+
+```{r}
+pretest$gastosMenor<- ifelse(!(pretest$gastosMenor %in% 1:4),NA,pretest$gastosMenor)
+pretest$estrato<- ifelse(!(pretest$estrato %in% 1:6),NA,pretest$estrato)
+
+x<-as.numeric(as.character(pretest$edadEncuestado));pretest$edadEncuestado<- ifelse(x>=18 &x<=100,x,NA)
+
+pretest$CDI<- chartr("áéíóúñ", "aeioun",tolower(pretest$CDI))
+pretest$gestante<- ifelse(pretest$gestante %in% c("No","Si"),pretest$gestante,NA)
+pretest$discapacidad<- ifelse(pretest$discapacidad %in%c(1,"No"),"No",ifelse(pretest$discapacidad %in% c(2,"Si"),"Si",NA))
+pretest$discapacidadCual<- chartr("áéíóúñ", "aeioun",tolower(pretest$discapacidadCual))
+pretest$primerHijo<-as.numeric(as.character(pretest$primerHijo))
+pretest$primerHijo<- ifelse(!(pretest$primerHijo %in% 13:50),NA,pretest$primerHijo)
+pretest$numMenores<- as.numeric(as.character(ifelse(!(pretest$numMenores %in% 0:10),NA,pretest$numMenores)))
+pretest$edadPadre<- as.numeric(as.character(ifelse(!(pretest$edadPadre %in% 14:100),NA,pretest$edadPadre)))
+
+pretest$educacionPadre<- ifelse(pretest$educacionPadre=="Bachillerato",3,ifelse(
+  pretest$educacionPadre=="Postgrado",6,ifelse(
+    pretest$educacionPadre=="Pregrado",5,ifelse(
+      pretest$educacionPadre=="Primaria",2,ifelse(
+        pretest$educacionPadre=="Sin estudios",1,ifelse(
+          pretest$educacionPadre=="Técnico-tecnólogo",4,pretest$educacionPadre))))))
+
+pretest$ocupacionPadre<- ifelse(pretest$ocupacionPadre=="Estudia",1,ifelse(
+  pretest$ocupacionPadre=="Trabajo formal",2,ifelse(
+    pretest$ocupacionPadre=="Trabajo informal",3,ifelse(
+      pretest$ocupacionPadre=="Amo(a) de casa",4,ifelse(
+        pretest$ocupacionPadre=="Pensionado",5,ifelse(
+          pretest$ocupacionPadre=="Desempleado",6,ifelse(
+            pretest$ocupacionPadre=="Inactivo por enfermedad",7,pretest$ocupacionPadre)))))))
+
+pretest$aniosRadicado<- as.numeric(as.character(ifelse(!(pretest$aniosRadicado %in% 0:100),NA,pretest$aniosRadicado)))
+pretest$DedondeLlego<- chartr("áéíóúñ", "aeioun",tolower(pretest$DedondeLlego))
+pretest$CantidadCasa<- as.numeric(as.character(ifelse(!(pretest$CantidadCasa %in% 1:14),NA,pretest$CantidadCasa)))
+pretest$DineroAprox<- as.numeric(as.character(ifelse(!(pretest$DineroAprox %in% 20000:10000000),NA,pretest$DineroAprox)))
+x<-as.numeric(as.character(pretest$edad_meses));pretest$edad_meses<- ifelse(x>=1 &x<=72,x,NA)
+```
+
+Agregar sexo del niño
+
+```{r}
+ninos<-read_excel("genero_ninosxd.xlsx")[c("IDencuestado","sexo_menor")]
+ninos$IDencuestado<- as.character(ninos$IDencuestado)
+pretest %>%
+  left_join(ninos, by = "IDencuestado",suffix=c("",""))->pretest
+```
+
+
+
+```{r}
+write.csv2(pretest,"pretest.csv")
+write.csv2(datamun_pm,"tablapm_mun.csv")
+write.csv2(databaq[c(1,30:62)],"tablapm_bar.csv")
+```

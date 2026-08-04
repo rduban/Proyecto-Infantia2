@@ -1,0 +1,257 @@
+---
+title: "Data scoring pre-test"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+```{r, include=FALSE}
+pretest<- read_csv2("pretest_imputed.csv")[-1]
+```
+
+# Calificacion
+
+## Actitudes hacia el cuidado
+
+```{r}
+a<-pretest[paste0("A",1:40)]
+
+# cognitivo
+x<-c(1,1.063,0.818,1.076,1.095,1.124,1.087,1.068)
+pretest$cuid_cognit<- rowSums(t(t(a[1:8])*x))/sum(x)
+
+# alimentacion
+x<-c(1,1.090,1.077)
+pretest$cuid_alimen<- rowSums(t(t(a[9:11])*x))/sum(x)
+#suenio
+x<-c(1,0.917,0.992)
+pretest$cuid_suenio<- rowSums(t(t(a[13:15])*x))/sum(x)
+# salud
+x<-c(1,1.082,1.072,1.033,1.002,1.014)
+pretest$cuid_salud<- rowSums(t(t(a[17:22])*x))/sum(x)
+# etico
+x<-c(1,1.052,0.984,0.955,0.417,0.987)
+pretest$cuid_etico<- rowSums(t(t(a[23:28])*x))/sum(x)
+# emocional
+x<-c(1,0.733,1.027,1.041)
+pretest$cuid_emocion<- rowSums(t(t(a[c(30,32,33,35)])*x))/sum(x)
+# trascendencia
+x<-c(1,0.861,0.964,0.986,0.988)
+pretest$cuid_trascen<- rowSums(t(t(a[36:40])*x))/sum(x)
+
+```
+
+## Habitos saludables
+
+```{r}
+a<-pretest[paste0("HS",1:47)]
+
+# relaciones
+x<-c(1,0.945,0.921,0.964,0.930,0.897,0.921)
+
+pretest$relaciones<- rowSums(t(t(a[1:7])*x))/sum(x)
+
+# actividad
+x<-c(1,1.011,0.605)
+pretest$actividad<- rowSums(t(t(a[8:10])*x))/sum(x)
+
+# descanso
+x<-c(1,1.035,1.025,1.010)
+pretest$descanso<- rowSums(t(t(a[11:14])*x))/sum(x)
+
+#nutricion
+x<-c(1,0.833,1.085,0.921)
+pretest$nutricion<- rowSums(t(t(a[15:18])*x))/sum(x)
+
+# oral
+x<-c(1,0.919,0.859,0.958)
+pretest$oral<- rowSums(t(t(a[19:22])*x))/sum(x)
+
+# Sexualidad
+x<-c(1,0.984,1.076,0.929,0.899)
+pretest$sexualidad<- rowSums(t(t(a[23:27])*x))/sum(x)
+
+# sustancias
+x<-c(1,1.073,1.011,1.039,1.067)
+pretest$sustancias<- rowSums(t(t(a[28:32])*x))/sum(x)
+
+# optimismo
+x<-c(1,1.046,1.069,1.037,0.919)
+pretest$optimismo<- rowSums(t(t(a[33:37])*x))/sum(x)
+
+# ambiente
+x<-c(1,1.023,1.018,1.072)
+pretest$ambiente<- rowSums(t(t(a[38:41])*x))/sum(x)
+
+# movilidad
+x<-c(1,0.925,0.911,1.001,1.00,1.039)
+pretest$movilidad<- rowSums(t(t(a[42:47])*x))/sum(x)
+```
+
+## TPB
+
+```{r}
+# autoeficacia
+pretest$autoeficacia<- rowSums(pretest[paste0("AE",1:6)])/6
+
+# intencion
+pretest$intencion<- rowSums(pretest[paste0("I",1:5)])/5
+
+#norma subjetiva
+pretest$norma<- rowSums(pretest[paste0("NS",1:7)])/7
+```
+
+
+## Enfoque regulatorio
+
+```{r}
+a<-pretest[paste0("ER",1:16)]
+# promocion
+x<-c(1,0.926,0.972,1.010,1.045,1.094,0.959,1.034)
+pretest$promocion<- rowSums(t(t(a[1:8])*x))/sum(x)
+
+# prevencion
+x<-c(1,1.048,1.013,1.034,0.909,1.006,0.948,0.812)
+pretest$prevencion<- rowSums(t(t(a[9:16])*x))/sum(x)
+```
+
+## actitudes de genero
+
+```{r}
+a<-pretest[paste0("AG",1:7)]
+pretest$actitud_sexi<- rowSums(a[c(1,4:6)])/4
+```
+
+## Satisfaccion con la vida
+
+```{r}
+a<-pretest[paste0("S",1:5)]
+pretest$satisfa<- rowSums(a)/5
+```
+
+## Pobreza multidimensional
+
+```{r, include=FALSE}
+x<- read_csv2("tablapm_imputada.csv")[-1]
+
+x$mayor15<- ifelse(x$edad>=15,1,0)
+x$resago<-ifelse(x$edad %in% 7:17,ifelse(x$estudio<(x$edad-6),1,0),0)
+
+```
+
+```{r}
+x %>%
+  filter(mayor15==1 & !is.na(cedula)) %>%
+  group_by(cedula) %>%
+  summarise(z = mean(na.omit(estudio))) %>%
+  right_join(pretest[c(1,50:64)],by=c("cedula"="IDencuestado"))->a
+
+x %>%
+  filter(!is.na(cedula)) %>%
+  group_by(cedula) %>%
+  summarise(z = ifelse(sum(resago>0),1,0)) %>%
+  right_join(pretest[c(1,50:64)],by=c("cedula"="IDencuestado"))->b
+
+```
+
+
+```{r}
+# condiciones educativas
+x1<-ifelse(pretest$PM2==1,10,0)
+x2<-ifelse(a$z<9,10,0)
+pretest$pm_educativa<-rowSums(cbind(x1,x2))
+
+# condiciones de la ninez
+x1<-ifelse(pretest$PM3==1,5,0)
+x2<-ifelse(b$z==1,5,0)
+x3<-ifelse(pretest$PM4==1&pretest$PM5==1,5,0)
+x4<-ifelse(pretest$PM6==1&pretest$PM7==1,5,0)
+pretest$pm_ninez<-rowSums(cbind(x1,x2,x3,x4))
+
+# trabajo
+x1<-ifelse(pretest$PM8==1,10,0)
+x2<-ifelse(pretest$PM9==1,10,0)
+pretest$pm_trabajo<-rowSums(cbind(x1,x2))
+
+# salud
+x1<-ifelse(pretest$PM10==1,10,0)
+x2<-ifelse(pretest$PM11==1,10,0)
+pretest$pm_salud<-rowSums(cbind(x1,x2))
+
+# servicios publicos
+x1<-ifelse(pretest$PM12==1,4,0)
+x2<-ifelse(pretest$PM13==0,4,0)
+x3<-ifelse(pretest$PM14==1,4,0)
+x4<-ifelse(pretest$PM15==1,4,0)
+x5<-ifelse(pretest$PM16==1,4,0)
+pretest$pm_servicios<-rowSums(cbind(x1,x2,x3,x4,x5))
+
+# pobreza multidimensional total
+pretest$pm_total<-rowSums(pretest[c("pm_educativa","pm_ninez","pm_trabajo",
+                                    "pm_salud","pm_servicios")])
+```
+
+# Escalas a categoricas
+
+```{r}
+pretest$edad_mesesCat<-ifelse(is.na(pretest$edad_meses),NA,
+       ifelse(pretest$edad_meses<13,"0-12",
+              ifelse(pretest$edad_meses<37,"13-36","37-60")))
+```
+
+```{r}
+a<-data.frame(apply(pretest[203:232],2,function(x){
+  ifelse(is.na(x),NA,
+  ifelse(x<quantile(x,probs = .25,na.rm = T),"bajo",
+         ifelse(x<quantile(x,probs = .75,na.rm = T),"medio","alto")
+  ))
+}))
+
+names(a)<-paste0(names(a),"_cat")
+```
+
+```{r}
+pretest<-cbind(pretest,a)
+```
+
+```{r}
+#write.csv2(pretest,"pretest_calificado.csv")
+write.csv2(pretest,"pretest_calificado_v2.csv")
+```
+
+Para daladier
+
+```{r}
+pretest_dala<-pretest
+pretest_dala$nombreMadre
+
+x<-data.frame(matrix(NA,ncol = 9,nrow = nrow(pretest_dala)))
+
+names(x)<-c("nombreMadre","ApoyoQuien","ApoyoComo","ApoyoUtil","tablaDemo","IDencuestado2","IDmenor2","telefonoEncuestado","PM5_1")
+
+pretest_dala<-cbind(pretest_dala,x)
+
+pretest_dala$nombreMadre<-pretest_dala$NombreEncuestado
+pretest_dala$IDencuestado2<-pretest_dala$IDencuestado
+pretest_dala$IDmenor2<-pretest_dala$IDencuestado
+pretest_dala$telefonoEncuestado<-pretest_dala$telefonoEncuestado
+```
+
+
+```{r}
+variables<-c("municipio","IDencuestado","NombreEncuestado","direccionEncuestado",
+"telefonoEncuestado","emailEncuestado","nombreMenor","IDmenor","relacionPadres","gastosMenor","barrio","estrato","edadEncuestado","sexo","etnia","etniaCual","educacion","ocupacion","parentesco","numeroFamiliar","CDI","fechaNacimiento","discapacidad","discapacidadCual","nombreMadre","primerHijo","numMenores","edadPadre","educacionPadre","ocupacionPadre","aniosRadicado","Desplazado","CuantoDesplazo","DedondeLlego","CantidadCasa","DineroAprox","ApoyoQuien","ApoyoComo","ApoyoUtil","tablaDemo","IDencuestado2","IDmenor2","municipio","telefonoEncuestado",paste0("PM",2:5),"PM5_1",paste0("PM",6:16),paste0("A",1:40),paste0("HS",1:47),paste0("ER",1:16),paste0("AE",1:6),paste0("AG",1:7),paste0("S",1:5),paste0("I",1:5),paste0("NS",1:7),"fechaRegistro")
+
+```
+
+```{r}
+pretest_dala<-pretest_dala[variables]
+write.csv2(pretest_dala,"pretest_dala.csv")
+```
+

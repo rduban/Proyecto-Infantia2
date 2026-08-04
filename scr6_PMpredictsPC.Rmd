@@ -1,0 +1,247 @@
+---
+title: "La pobreza multidimensional predice las practicas de cuidado"
+author: "Duban Romero"
+date: '`r Sys.time()`'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+source("https://raw.githubusercontent.com/rduban/Rfunctions_DR/main/R%20functions.R")
+library(readxl)
+library(tidyverse)
+library(patchwork)
+library(knitr)
+
+```
+
+```{r, include=FALSE}
+pretest<-read_csv2("pretest_calificado.csv")[-1]
+
+variables<-c("cuid_cognit","cuid_alimen","cuid_suenio","cuid_salud",
+          "cuid_etico","cuid_emocion","cuid_trascen","pm_total","contexto")
+demogra<-c("pm_educativa","pm_ninez","pm_trabajo","pm_salud","pm_servicios",
+           "educacion_gr","parentesco","ocupacion_gr","etnia","familia","edad_meses","edadEncuestado","numMenores")
+
+y<-ifelse(rowSums(is.na(pretest[variables]))>0,1,0)
+pretest<- pretest[y==0,c(variables,demogra)]
+```
+
+```{r,echo=F}
+pretest$pm_educativa_gr<- ifelse(is.na(pretest$pm_educativa),NA,
+                                 ifelse(pretest$pm_educativa!=0,"P","NoP"))
+pretest$pm_ninez_gr<- ifelse(is.na(pretest$pm_ninez),NA,
+                                 ifelse(pretest$pm_ninez!=0,"P","NoP"))
+pretest$pm_trabajo_gr<- ifelse(is.na(pretest$pm_trabajo),NA,
+                                 ifelse(pretest$pm_trabajo!=0,"P","NoP"))
+pretest$pm_salud_gr<- ifelse(is.na(pretest$pm_salud),NA,
+                                 ifelse(pretest$pm_salud!=0,"P","NoP"))
+pretest$pm_servicios_gr<- ifelse(is.na(pretest$pm_servicios),NA,
+                                 ifelse(pretest$pm_servicios!=0,"P","NoP"))
+```
+
+```{r}
+dim(pretest)
+table(pretest$educacion_gr)
+prop.table(table(pretest$educacion_gr))
+table(pretest$ocupacion_gr)
+prop.table(table(pretest$ocupacion_gr))
+table(pretest$contexto)
+prop.table(table(pretest$contexto))
+table(pretest$parentesco)
+prop.table(table(pretest$parentesco))
+table(pretest$etnia)
+prop.table(table(pretest$etnia))
+table(pretest$familia)
+prop.table(table(pretest$familia))
+prop.table(table(pretest[pretest$contexto=="rural",]$familia))
+prop.table(table(pretest[pretest$contexto=="urbano",]$familia))
+prop.table(table(pretest[pretest$contexto=="rural",]$numMenores))
+prop.table(table(pretest[pretest$contexto=="urbano",]$numMenores))
+
+
+# edad del cuidador
+pretest$edadEncuestado<- ifelse(!(pretest$edadEncuestado %in% 18:100),median(pretest$edadEncuestado),pretest$edadEncuestado)
+summary(pretest$edadEncuestado);sd(pretest$edadEncuestado,na.rm = T)
+
+# Edad del niño
+pretest$edad_meses<- ifelse(!(pretest$edad_meses %in% 0:72),median(pretest$edad_meses),pretest$edad_meses)
+summary(pretest$edad_meses);sd(pretest$edad_meses,na.rm = T)
+
+```
+
+# Descriptivos generales
+
+```{r,echo=FALSE}
+a<-data.frame(apply(pretest[1:7],2,function(x){
+  round(cbind(mean(x,na.rm = T),sd(x,na.rm = T)),2)
+}))
+rownames(a)<-c("M","SD")
+kable(a)
+```
+
+# Regresión
+
+**Cognitivo**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_cognit~pm_total*contexto)
+summary(a)
+```
+
+**Alimentación**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_alimen~pm_total*contexto)
+summary(a)
+```
+
+**Sueño**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_suenio~pm_total*contexto)
+summary(a)
+```
+
+**Salud**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_salud~pm_total*contexto)
+summary(a)
+```
+
+**etico**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_etico~pm_total*contexto)
+summary(a)
+```
+
+**emocion**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_emocion~pm_total*contexto)
+summary(a)
+```
+
+**trascendencia**
+
+```{r, echo=FALSE}
+a<-lm(data=pretest, cuid_trascen~pm_total*contexto)
+summary(a)
+```
+
+# Visualizacion
+
+```{r, echo=FALSE}
+colores<-c("#FF8F33","#AC7299","#306C94","#A52A2A","#559F52",
+           "#808B90","#B17AA0","#6E8B3D","8B7E66","#7A67EE",
+           "#0F6B99","#CDAA7D","#FFBF80","#71B966","#9932CC",
+           "#CD5C5C","#EED2EE","#8B864E","#7A8B8B","#FFDEAD",
+           "#8B3A62","#7B7B7B","#CDB5CD","#8B7E66","#6E8B3D")
+```
+
+```{r, echo=FALSE}
+x1<-pretest %>%
+  filter(cuid_cognit>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_cognit, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,10))+
+  labs(y="Cognitive")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x2<-pretest %>%
+  filter(cuid_alimen>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_alimen, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Feeding")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+  
+x3<-pretest %>%
+  filter(cuid_suenio>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_suenio, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Sleep")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x4<-pretest %>%
+  filter(cuid_salud>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_salud, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Health")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x5<-pretest %>%
+  filter(cuid_etico>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_etico, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Ethical")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x6<-pretest %>%
+  filter(cuid_emocion>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_emocion, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Emotion")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x7<-pretest %>%
+  filter(cuid_trascen>2) %>%
+  ggplot(aes(x=pm_total,y=cuid_trascen, group=contexto))+
+  geom_point(aes(color=contexto),size=2.5,alpha=0.7)+
+  geom_smooth(aes(color=contexto), method = "lm",se=F)+
+  scale_x_discrete(name="Multidimensional poverty index",breaks=seq(0,100,20))+
+  labs(y="Trascendence")+
+  scale_color_manual("Living area",values=colores,labels=c("rural"="Rural","urbano"="Urban"))+
+  theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="#EEE9E9"))
+
+x8<-pretest %>%
+  ggplot()+theme(
+        panel.background = element_rect(fill = "white"),
+        panel.grid = element_line(color="white"))
+
+#(x1+x2)/(x3+x4)/(x5+x6)+(x7+x8)+plot_layout(guides = "collect")+
+x1/x3/x4+plot_layout(guides = "collect")+
+  plot_annotation(
+    tag_levels = 'A',
+    title="Child care attitudes and poverty",
+    theme = theme(
+      plot.title=element_text(size=20)))
+
+```
+
+
+
+
